@@ -1,8 +1,9 @@
-﻿#include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <math.h>
 #include "map.h"
+
 typedef double db;
 
 map points[50];
@@ -14,13 +15,10 @@ db fun(double x) {
 void filling_map(db(*fun)(db), map* points) {
     srand(42);
     db step = (rand() % 14) / (db)27;
-
     db x_st = -7;
-
     for (int i = 0; i < 50; ++i) {
         points[i].key = x_st;
         points[i].value = fun(x_st);
-
         x_st += step;
     }
 }
@@ -42,32 +40,22 @@ void print_map(map* points) {
 
 db MSE(int n, db* y_p, db* y_t) {
     db result = 0;
-
     for (int i = 0; i < n; ++i)
         result += (y_p[i] - y_t[i]) * (y_p[i] - y_t[i]);
-
-    result = result / n / (n - 1);
-
-    return sqrt(result);
+    result = result / n;
+    return result;
 }
 
-db prediction(db x, int degree_polynom, ...) {
-    va_list args;
-    va_start(args, degree_polynom);
-
+db prediction(db x, int degree_polynom, db* coefficient) {
     db result = 0;
-    for (int i = 0; i < degree_polynom + 1; ++i) {
-        result += va_arg(args, db) * pow(x, i);
+    for (int i = 0; i < degree_polynom + 1; i++) {
+        result += coefficient[i] * pow(x, i);
     }
-
-    va_end(args);
-
     return result;
 }
 
 void damage_points(int n, map* points) {
     srand(42);
-
     for (int i = 0; i < n; ++i) {
         printf("%f ", points[i].value);
         db dmage = ((rand() % 100) / 99.0 * 0.5);
@@ -76,28 +64,52 @@ void damage_points(int n, map* points) {
     }
 }
 
-void fit(db lambda, int count_steps, int degree_polynom, db* coefficient, int len_map, db* map) {
+db MSE_prediction(int len_map, int degree_polynom, db* test, db* coefficient, db* pred, map* map) {
+    for (int j = 0; j < len_map; j++) {
+        pred[j] = prediction(map[j].key, degree_polynom, coefficient);
+    }
+    db mse = MSE(len_map, pred, test);
+    return mse;
+}
 
-    for (int i = 0; i < count_steps; ++i) {
-    
+void fit(db lambda, int count_steps, int degree_polynom, db* coefficient, int len_map, map* map) {
+    db eps = 0.0001;
+
+    db* pred = new db[len_map];
+    db* test = new db[len_map];
+    get_y_points(len_map, test, map);
+
+    for (int i = 0; i < count_steps; i++) {
+        db mse = MSE_prediction(len_map, degree_polynom, test, coefficient, pred, map);
+
+        for (int k = 0; k <= degree_polynom; k++) {
+            coefficient[k] += eps;
+            db new_mse = MSE_prediction(len_map, degree_polynom, test, coefficient, pred, map);
+            db delta_mse = mse - new_mse;
+            coefficient[k] -= eps;
+
+            if (delta_mse < 0) {
+                coefficient[k] -= lambda;
+            }
+            else {
+                coefficient[k] += lambda;
+            }
+        }
+        printf("Шаг %d, MSE = %f\n", i, mse);
     }
 
+    delete[] pred;
+    delete[] test;
 }
 
 int main()
 {
     filling_map(fun, points);
-
     print_map(points);
 
-    /*db test_y[50];
-    get_y_points(50, test_y, points);
+    db coef[3] = { 1, 1, 1 };
+    fit(0.0002, 100000, 2, coef, 50, points);
+    printf("%f, %f, %f\n", coef[2], coef[1], coef[0]);
 
-    damage_points(50, points);
-    db test_y_1[50];
-    get_y_points(50, test_y_1, points);*/
-
-    //printf("%f", MSE(50, test_y, test_y_1));
-
-
+    return 0;
 }
